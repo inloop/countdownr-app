@@ -12,10 +12,7 @@ import Json.Encode as Encode
 import Parser exposing (..)
 import Task
 import Time exposing (Posix)
-
-
-
--- MAIN
+import TimeFormatter exposing (formatTime)
 
 
 main : Program () Model Msg
@@ -24,7 +21,7 @@ main =
         { init = \_ -> init
         , view = view
         , update = update
-        , subscriptions = \_ -> Sub.none
+        , subscriptions = subscriptions
         }
 
 
@@ -33,14 +30,33 @@ main =
 
 
 type alias Model =
-    { deadline : Posix }
+    { left : Int
+    , running : Bool
+    , isDone : Bool
+    , deadline : Posix
+    , time : Posix
+    , zone : Int -- timzone in minutes
+    }
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( Model (Time.millisToPosix 0)
+    ( Model 0 False False (Time.millisToPosix 0) (Time.millisToPosix 0) 120
     , send (Fetch 39)
     )
+
+
+
+-- SUBSCRIPTIONS
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    if model.running then
+        Time.every 1000 Tick
+
+    else
+        Sub.none
 
 
 
@@ -54,7 +70,9 @@ send msg =
 
 
 type Msg
-    = Fetch Int
+    = Tick Posix
+    | Start Posix
+    | Fetch Int
     | Fetched (Result Http.Error String)
     | ToPosix (Result (List DeadEnd) Posix)
 
@@ -62,6 +80,30 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        Tick time ->
+            let
+                timeZoneMillies =
+                    model.zone * 60 * 1000
+
+                deadlineMillies =
+                    Time.posixToMillis model.deadline
+
+                timeMillies =
+                    Time.posixToMillis time
+
+                left =
+                    deadlineMillies - timeMillies - timeZoneMillies
+
+                isDone =
+                    left < 0
+            in
+            ( { model | left = left, isDone = isDone, running = not isDone }
+            , Cmd.none
+            )
+
+        Start deadline ->
+            ( { model | running = True }, Cmd.none )
+
         Fetch id ->
             ( model, fetchDeadline model )
 
@@ -76,7 +118,7 @@ update msg model =
         ToPosix result ->
             case result of
                 Ok deadline ->
-                    ( { model | deadline = deadline }, Cmd.none )
+                    ( { model | deadline = deadline }, send (Start model.deadline) )
 
                 Err _ ->
                     ( model, Cmd.none )
@@ -115,9 +157,7 @@ view model =
         , style "weight" "100vw"
         ]
         [ titleView
-        , p
-            [ style "color" "rgba(255, 255, 255, 0.8)" ]
-            [ text <| Debug.toString <| model.deadline ]
+        , counterView model
 
         -- , p [ style "color" "rgba(255, 255, 255, 0.8)" ] [ text <| Debug.toString <| model ]
         ]
@@ -132,3 +172,21 @@ titleView =
         , style "letter-spacing" "0.2rem"
         ]
         [ text "Countdowner" ]
+
+
+counterView model =
+    p
+        [ style "color" "rgba(255, 255, 255, 1)"
+        , style "font-size" "8em"
+        , style "font-weight" "bold"
+        , style "text-align" "center"
+        , style "text-shadow" "rgb(93, 253, 223) 3px 3px 0px, rgb(252, 0, 102) -3px -3px 0px"
+        , style "letter-spacing" "3px"
+        ]
+        [ text <|
+            if model.isDone then
+                "Finished!"
+
+            else
+                formatTime model.left
+        ]

@@ -1,4 +1,4 @@
-module TimeFormatter exposing (calcDeadline, posixMidnight)
+module TimeFormatter exposing (calcDeadline, formatTime, posixMidnight)
 
 import Time exposing (Posix)
 
@@ -37,3 +37,22 @@ calcDeadline time hours minutes seconds =
             Maybe.withDefault 0 (String.toInt seconds) * secondConst
     in
     Time.millisToPosix (time + hoursMillies + minutesMillies + secondsMillies)
+
+
+formatTime : Int -> String
+formatTime millies =
+    let
+        hours =
+            millies // hourConst
+
+        minutes =
+            remainderBy hourConst millies // minuteConst
+
+        secondes =
+            remainderBy minuteConst millies // secondConst
+    in
+    String.fromInt hours ++ "h " ++ getTimeString minutes ++ "m " ++ getTimeString secondes ++ "s"
+
+
+getTimeString time =
+    String.padLeft 2 '0' <| String.fromInt time
