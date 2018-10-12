@@ -2,6 +2,7 @@ module Main exposing (main)
 
 import Api exposing (deadlineUrl)
 import Browser
+import Browser.Navigation as Nav
 import Debug
 import Html exposing (..)
 import Html.Attributes exposing (style)
@@ -10,18 +11,22 @@ import Iso8601
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Parser exposing (..)
+import String
 import Task
 import Time exposing (Posix)
 import TimeFormatter exposing (formatTime)
+import Url
 
 
 main : Program () Model Msg
 main =
-    Browser.element
-        { init = \_ -> init
+    Browser.application
+        { init = init
         , view = view
         , update = update
         , subscriptions = subscriptions
+        , onUrlChange = UrlChanged
+        , onUrlRequest = LinkClicked
         }
 
 
@@ -36,12 +41,13 @@ type alias Model =
     , deadline : Posix
     , time : Posix
     , zone : Int -- timzone in minutes
+    , url : Url.Url
     }
 
 
-init : ( Model, Cmd Msg )
-init =
-    ( Model 0 False False (Time.millisToPosix 0) (Time.millisToPosix 0) 120
+init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
+init flags url key =
+    ( Model 0 False False (Time.millisToPosix 0) (Time.millisToPosix 0) 120 url
     , send (Fetch 39)
     )
 
@@ -75,6 +81,8 @@ type Msg
     | Fetch Int
     | Fetched (Result Http.Error String)
     | ToPosix (Result (List DeadEnd) Posix)
+    | LinkClicked Browser.UrlRequest
+    | UrlChanged Url.Url
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -123,6 +131,12 @@ update msg model =
                 Err _ ->
                     ( model, Cmd.none )
 
+        LinkClicked _ ->
+            ( model, Cmd.none )
+
+        UrlChanged url ->
+            ( model, Cmd.none )
+
 
 
 -- HTTP
@@ -136,7 +150,12 @@ encodeBody value =
 
 fetchDeadline : Model -> Cmd Msg
 fetchDeadline model =
-    Http.send Fetched (Http.post deadlineUrl (encodeBody "56" |> Http.jsonBody) responseDecoder)
+    case model.url.query of
+        Just query ->
+            Http.send Fetched (Http.post deadlineUrl (encodeBody (String.dropLeft 3 query) |> Http.jsonBody) responseDecoder)
+
+        Nothing ->
+            Cmd.none
 
 
 responseDecoder : Decode.Decoder String
@@ -148,19 +167,23 @@ responseDecoder =
 -- VIEW
 
 
-view : Model -> Html Msg
+view : Model -> Browser.Document Msg
 view model =
-    div
-        [ style "background" "#010001"
-        , style "padding-top" "6rem"
-        , style "height" "100vh"
-        , style "weight" "100vw"
-        ]
-        [ titleView
-        , counterView model
+    { title = "URL Interceptor"
+    , body =
+        [ div
+            [ style "background" "#010001"
+            , style "padding-top" "6rem"
+            , style "height" "100vh"
+            , style "weight" "100vw"
+            ]
+            [ titleView
+            , counterView model
 
-        -- , p [ style "color" "rgba(255, 255, 255, 0.8)" ] [ text <| Debug.toString <| model ]
+            -- , p [ style "color" "rgba(255, 255, 255, 0.8)" ] [ text <| Debug.toString <| model ]
+            ]
         ]
+    }
 
 
 titleView =
