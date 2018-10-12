@@ -1,10 +1,14 @@
 module Main exposing (main)
 
+import Api exposing (deadlineUrl)
 import Browser
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (onInput)
+import Html.Events exposing (onClick, onInput)
+import Http
 import Iso8601
+import Json.Decode exposing (Decoder, field, int)
+import Json.Encode as Encode
 import Task
 import Time exposing (..)
 import TimeFormatter exposing (calcDeadline, posixMidnight)
@@ -35,12 +39,14 @@ type alias Model =
     , minutes : String
     , seconds : String
     , id : Int
+    , err : String
+    , sent : Bool
     }
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( Model (Time.millisToPosix 0) "" "" "" 0, Task.perform Now Time.now )
+    ( Model (Time.millisToPosix 0) "" "" "" 0 "" False, Task.perform Now Time.now )
 
 
 
@@ -52,6 +58,8 @@ type Msg
     | Hours String
     | Minutes String
     | Seconds String
+    | Send Posix
+    | Resolved (Result Http.Error Int)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -69,6 +77,46 @@ update msg model =
         Seconds seconds ->
             ( { model | seconds = seconds }, Cmd.none )
 
+        Resolved result ->
+            case result of
+                Ok id ->
+                    ( { model | sent = True, id = id }, Cmd.none )
+
+                Err err ->
+                    ( { model | err = Debug.toString <| err }, Cmd.none )
+
+        Send deadline ->
+            ( model, createDeadline (Iso8601.fromTime deadline) )
+
+
+
+-- HTTP
+
+
+encodeBody : String -> Encode.Value
+encodeBody value =
+    Encode.object
+        [ ( "query"
+          , Encode.string "mutation($date: Date) { createDeadline(input:{ date:$date }) { id }}"
+          )
+        , ( "variables"
+          , Encode.object
+                [ ( "date"
+                  , Encode.string value
+                  )
+                ]
+          )
+        ]
+
+
+createDeadline value =
+    Http.send Resolved (Http.post deadlineUrl (encodeBody value |> Http.jsonBody) responseDecoder)
+
+
+responseDecoder : Decoder Int
+responseDecoder =
+    field "data" (field "createDeadline" (field "id" int))
+
 
 
 -- VIEW
@@ -83,10 +131,12 @@ view model =
         , style "weight" "100vw"
         ]
         [ title
-        , viewForm model
-        , p
-            [ style "text-align" "center" ]
-            [ text <| Iso8601.fromTime (calcDeadline (posixMidnight model.now) model.hours model.minutes model.seconds) ]
+        , if model.sent then
+            viewSent model
+
+          else
+            viewForm model
+        , p [] [ text <| model.err ]
         ]
 
 
@@ -101,6 +151,39 @@ title =
         [ text "Countdowner" ]
 
 
+viewSent model =
+    div
+        []
+        [ p
+            [ style "color" "black"
+            , style "font-size" "8em"
+            , style "font-weight" "bold"
+            , style "text-align" "center"
+            , style "letter-spacing" "3px"
+            , style "padding-bottom" "2rem"
+            , style "text-shadow" "rgb(93, 253, 223) 3px 3px 0px"
+            ]
+            [ text ("Created with id: " ++ String.fromInt model.id) ]
+        , a
+            [ href ("index.html?id=" ++ String.fromInt model.id)
+            , style "border-bottom" "3px solid rgb(252, 0, 102)"
+            , style "color" "rgb(252, 0, 102)"
+            , style "text-decoration" "none"
+            , style "font-size" "1.5em"
+            , style "text-transform" "uppercase"
+            , style "position" "absolute"
+            , style "left" "50%"
+            , style "transform" "translateX(-50%)"
+            , style "padding" "7px 15px"
+            ]
+            [ text "Go to ->" ]
+        ]
+
+
+
+--
+
+
 viewForm : Model -> Html Msg
 viewForm model =
     div
@@ -111,6 +194,16 @@ viewForm model =
         [ viewInput "number" "Hours" model.hours Hours
         , viewInput "number" "Minutes" model.minutes Minutes
         , viewInput "number" "Seconds" model.seconds Seconds
+        , button
+            [ onClick (Send (calcDeadline (posixMidnight model.now) model.hours model.minutes model.seconds))
+            , style "background" "white"
+            , style "border" "3px solid rgb(252, 0, 102)"
+            , style "color" "rgb(252, 0, 102)"
+            , style "font-weight" "bold"
+            , style "padding" "8px 40px"
+            , style "cursor" "pointer"
+            ]
+            [ text "CREATE" ]
         ]
 
 
