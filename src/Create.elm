@@ -4,6 +4,11 @@ import Browser
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onInput)
+import Iso8601
+import Task
+import Time exposing (..)
+import TimeFormatter exposing (calcDeadline, posixMidnight)
+import Url.Builder as Url
 
 
 
@@ -25,15 +30,17 @@ main =
 
 
 type alias Model =
-    { hours : String
+    { now : Posix
+    , hours : String
     , minutes : String
     , seconds : String
+    , id : Int
     }
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( Model "" "" "", Cmd.none )
+    ( Model (Time.millisToPosix 0) "" "" "" 0, Task.perform Now Time.now )
 
 
 
@@ -41,7 +48,8 @@ init =
 
 
 type Msg
-    = Hours String
+    = Now Posix
+    | Hours String
     | Minutes String
     | Seconds String
 
@@ -49,6 +57,9 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        Now now ->
+            ( { model | now = now }, Cmd.none )
+
         Hours hours ->
             ( { model | hours = hours }, Cmd.none )
 
@@ -75,7 +86,7 @@ view model =
         , viewForm model
         , p
             [ style "text-align" "center" ]
-            [ text <| model.hours ++ ":" ++ model.minutes ++ ":" ++ model.seconds ]
+            [ text <| Iso8601.fromTime (calcDeadline (posixMidnight model.now) model.hours model.minutes model.seconds) ]
         ]
 
 
