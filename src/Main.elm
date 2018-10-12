@@ -6,9 +6,12 @@ import Debug
 import Html exposing (..)
 import Html.Attributes exposing (style)
 import Http
+import Iso8601
 import Json.Decode as Decode
 import Json.Encode as Encode
+import Parser exposing (..)
 import Task
+import Time exposing (Posix)
 
 
 
@@ -30,12 +33,12 @@ main =
 
 
 type alias Model =
-    { deadline : String }
+    { deadline : Posix }
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( Model ""
+    ( Model (Time.millisToPosix 0)
     , send (Fetch 39)
     )
 
@@ -53,6 +56,7 @@ send msg =
 type Msg
     = Fetch Int
     | Fetched (Result Http.Error String)
+    | ToPosix (Result (List DeadEnd) Posix)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -64,7 +68,15 @@ update msg model =
         Fetched result ->
             case result of
                 Ok timeStamp ->
-                    ( { model | deadline = timeStamp }, Cmd.none )
+                    ( model, send (ToPosix (Iso8601.toTime timeStamp)) )
+
+                Err _ ->
+                    ( model, Cmd.none )
+
+        ToPosix result ->
+            case result of
+                Ok deadline ->
+                    ( { model | deadline = deadline }, Cmd.none )
 
                 Err _ ->
                     ( model, Cmd.none )
