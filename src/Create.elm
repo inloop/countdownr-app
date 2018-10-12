@@ -3,6 +3,7 @@ module Main exposing (main)
 import Browser
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import Html.Events exposing (onInput)
 
 
 
@@ -24,12 +25,15 @@ main =
 
 
 type alias Model =
-    { test : String }
+    { hours : String
+    , minutes : String
+    , seconds : String
+    }
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( Model "My first variable", Cmd.none )
+    ( Model "" "" "", Cmd.none )
 
 
 
@@ -37,14 +41,22 @@ init =
 
 
 type Msg
-    = Test
+    = Hours String
+    | Minutes String
+    | Seconds String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        Test ->
-            ( model, Cmd.none )
+        Hours hours ->
+            ( { model | hours = hours }, Cmd.none )
+
+        Minutes minutes ->
+            ( { model | minutes = minutes }, Cmd.none )
+
+        Seconds seconds ->
+            ( { model | seconds = seconds }, Cmd.none )
 
 
 
@@ -60,9 +72,10 @@ view model =
         , style "weight" "100vw"
         ]
         [ title
+        , viewForm model
         , p
             [ style "text-align" "center" ]
-            [ text <| model.test ]
+            [ text <| model.hours ++ ":" ++ model.minutes ++ ":" ++ model.seconds ]
         ]
 
 
@@ -75,3 +88,29 @@ title =
         , style "letter-spacing" "0.2rem"
         ]
         [ text "Countdowner" ]
+
+
+viewForm : Model -> Html Msg
+viewForm model =
+    div
+        [ style "display" "flex"
+        , style "align-items" "center"
+        , style "justify-content" "center"
+        ]
+        [ viewInput "number" "Hours" model.hours Hours
+        , viewInput "number" "Minutes" model.minutes Minutes
+        , viewInput "number" "Seconds" model.seconds Seconds
+        ]
+
+
+viewInput : String -> String -> String -> (String -> msg) -> Html msg
+viewInput t p v toMsg =
+    input
+        [ type_ t
+        , placeholder p
+        , value v
+        , onInput toMsg
+        , style "padding" "10px 20px"
+        , style "margin-right" "10px"
+        ]
+        []
